@@ -1,8 +1,8 @@
 {
-  "name": "chainlinked",
+  "name": "qonvoy",
   "version": "0.0.1",
-  "description": "",
-  "main": "./build/chainlinked.js",
+  "description": "An extremely minimal task runner",
+  "main": "./build/qonvoy.js",
   "dependencies": {
     "promise-redis": "^0.0.5",
     "redis": "^2.8.0",
@@ -21,13 +21,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nateupstairs/chainlinked.git"
+    "url": "git+https://github.com/nateupstairs/qonvoy.git"
   },
   "author": "Nate Upstairs",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/nateupstairs/chainlinked/issues"
+    "url": "https://github.com/nateupstairs/qonvoy/issues"
   },
-  "homepage": "https://github.com/nateupstairs/chainlinked#readme",
-  "types": "./build/chainlinked.d.ts"
+  "homepage": "https://github.com/nateupstairs/qonvoy#readme",
+  "types": "./build/qonvoy.d.ts"
 }

@@ -11,8 +11,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 require('dotenv').config();
 const assert = require('assert');
 const tape = require('tape');
-const Chainlinked = require("./chainlinked");
-Chainlinked.init({
+const Qonvoy = require("./qonvoy");
+Qonvoy.init({
     redisConnectionString: process.env.REDIS_URL
 });
 function runTests() {
@@ -20,19 +20,19 @@ function runTests() {
         let id = null;
         yield tape.test('add', (t) => __awaiter(this, void 0, void 0, function* () {
             t.plan(1);
-            id = yield Chainlinked.add('test', {
+            id = yield Qonvoy.add('test', {
                 testing: true
             });
             t.equal(typeof id, 'string');
         }));
         yield tape.test('status', (t) => __awaiter(this, void 0, void 0, function* () {
             t.plan(1);
-            let result = yield Chainlinked.status('test', id);
+            let result = yield Qonvoy.status('test', id);
             t.equal(id, result.id);
         }));
         yield tape.test('process next', (t) => __awaiter(this, void 0, void 0, function* () {
             t.plan(1);
-            let result = yield Chainlinked.processOne('test', id, (item) => __awaiter(this, void 0, void 0, function* () {
+            let result = yield Qonvoy.processOne('test', id, (item) => __awaiter(this, void 0, void 0, function* () {
                 t.equal(id, item.id);
                 return true;
             }));
