@@ -98,8 +98,8 @@ export async function processOne(
         .eval(
             LuaCommands.getOne(),
             4,
-            `queue:test`,
-            `processing:test`,
+            `queue:${queue}`,
+            `processing:${queue}`,
             timestamp + '',
             id
         )
