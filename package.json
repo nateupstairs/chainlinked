@@ -1,0 +1,33 @@
+{
+  "name": "chainlinked",
+  "version": "0.0.1",
+  "description": "",
+  "main": "./build/chainlinked.js",
+  "dependencies": {
+    "promise-redis": "^0.0.5",
+    "redis": "^2.8.0",
+    "uuid": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^8.0.28",
+    "@types/tape": "^4.2.30",
+    "dotenv": "^4.0.0",
+    "tape": "^4.8.0",
+    "typescript": "^2.5.2"
+  },
+  "scripts": {
+    "test": "node ./build/test.js",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nateupstairs/chainlinked.git"
+  },
+  "author": "Nate Upstairs",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nateupstairs/chainlinked/issues"
+  },
+  "homepage": "https://github.com/nateupstairs/chainlinked#readme",
+  "types": "./build/chainlinked.d.ts"
+}
