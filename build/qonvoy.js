@@ -66,7 +66,7 @@ function processOne(queue, id, func) {
         let success = false;
         let timestamp = new Date().getTime();
         let result = yield Connection.client
-            .eval(LuaCommands.getOne(), 4, `queue:test`, `processing:test`, timestamp + '', id);
+            .eval(LuaCommands.getOne(), 4, `queue:${queue}`, `processing:${queue}`, timestamp + '', id);
         if (result) {
             success = yield runTask(queue, result, func);
         }
