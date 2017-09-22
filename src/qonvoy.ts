@@ -14,7 +14,7 @@ export interface Item {
     queue: string,
     attempts: number,
     success: boolean,
-    errors: string[],
+    error: string,
     meta: any
 }
 
@@ -35,7 +35,7 @@ export async function add(queue: string, meta: any) {
     item.queue = queue
     item.attempts = 0
     item.success = false
-    item.errors = []
+    item.error = ''
     item.meta = meta
     
     await Connection.client
@@ -47,7 +47,8 @@ export async function add(queue: string, meta: any) {
             'created', item.created,
             'queue', item.queue,
             'attempts', item.attempts,
-            'errors', item.errors.join('|||'),
+            'success', item.success,
+            'error', '',
             'meta', JSON.stringify(item.meta)
         )
         .exec()
@@ -149,19 +150,13 @@ async function load(queue: string, id: string) {
         return null
     }
     
-    let errors = []
-
-    if (data.errors !== '') {
-        errors = data.errors.split(/\|\|\|/)
-    }
-    
     let item = <Item>{
         id: data.id,
         created: parseInt(data.created),
         queue: data.queue,
         attempts: parseInt(data.attempts),
-        success: Boolean(data.success),
-        errors: errors,
+        success: (data.success === 'true'),
+        error: data.error,
         meta: JSON.parse(data.meta)
     }
 
@@ -193,6 +188,11 @@ async function runTask(
             await Connection.client
                 .multi()
                 .zrem(`processing:${item.queue}`, item.id)
+                .hset(
+                    `items:${item.queue}:${item.id}`,
+                    'success',
+                    'true'
+                )
                 .expire(
                     `items:${item.queue}:${item.id}`,
                     config.retention || 60*60*24
@@ -216,7 +216,7 @@ async function runTask(
             .hset(
                 `data:${item.queue}:${item.id}`,
                 'error',
-                JSON.stringify(item.errors.push(err.message))
+                err.message
             )
             .exec()
     }

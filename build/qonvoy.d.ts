@@ -8,7 +8,7 @@ export interface Item {
     queue: string;
     attempts: number;
     success: boolean;
-    errors: string[];
+    error: string;
     meta: any;
 }
 export declare function init(c: Config): void;
