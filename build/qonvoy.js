@@ -12,14 +12,50 @@ const uuid = require('uuid/v4');
 const Connection = require("./connection");
 const LuaCommands = require("./luaCommands");
 var config = null;
+/**
+ * Initialize Qonvoy
+ * @param c
+ */
 function init(c) {
     config = c;
     Connection.init(c.redisConnectionString);
 }
 exports.init = init;
+/**
+ * Get Client
+ * returns redis client that powers Qonvoy
+ */
+function getClient() {
+    return Connection.client;
+}
+exports.getClient = getClient;
+/**
+ * Get Timestamp
+ * @param seconds
+ */
+function getTimestamp(seconds = 0) {
+    return (new Date().getTime()) + (seconds * 1000);
+}
+exports.getTimestamp = getTimestamp;
+/**
+ * Modify Timestamp
+ * modifies a timestamp value by x seconds
+ * @param timestamp
+ * @param seconds
+ */
+function modifyTimestamp(timestamp, seconds = 0) {
+    return timestamp + (seconds * 1000);
+}
+exports.modifyTimestamp = modifyTimestamp;
+/**
+ * Add
+ * adds a task to named queue
+ * @param queue
+ * @param meta
+ */
 function add(queue, meta) {
     return __awaiter(this, void 0, void 0, function* () {
-        let timestamp = new Date().getTime();
+        let timestamp = getTimestamp();
         let id = uuid();
         let item = {};
         item.id = id;
@@ -38,6 +74,12 @@ function add(queue, meta) {
     });
 }
 exports.add = add;
+/**
+ * Status
+ * returns status of job by id
+ * @param queue
+ * @param id
+ */
 function status(queue, id) {
     return __awaiter(this, void 0, void 0, function* () {
         let item = yield load(queue, id);
@@ -48,10 +90,16 @@ function status(queue, id) {
     });
 }
 exports.status = status;
+/**
+ * Process Next
+ * processes next task from named queue
+ * @param queue
+ * @param func
+ */
 function processNext(queue, func) {
     return __awaiter(this, void 0, void 0, function* () {
         let success = false;
-        let timestamp = new Date().getTime();
+        let timestamp = getTimestamp();
         let result = yield Connection.client
             .eval(LuaCommands.getNext(), 3, `queue:${queue}`, `processing:${queue}`, timestamp + '');
         if (result) {
@@ -61,10 +109,17 @@ function processNext(queue, func) {
     });
 }
 exports.processNext = processNext;
+/**
+ * Process One
+ * process task by id from named queue
+ * @param queue
+ * @param id
+ * @param func
+ */
 function processOne(queue, id, func) {
     return __awaiter(this, void 0, void 0, function* () {
         let success = false;
-        let timestamp = new Date().getTime();
+        let timestamp = getTimestamp();
         let result = yield Connection.client
             .eval(LuaCommands.getOne(), 4, `queue:${queue}`, `processing:${queue}`, timestamp + '', id);
         if (result) {
@@ -74,12 +129,23 @@ function processOne(queue, id, func) {
     });
 }
 exports.processOne = processOne;
+/**
+ * Re-Queue
+ * moves any stuck jobs from the processing queue back to pending
+ * @param queue
+ * @param minAge
+ */
 function reQueue(queue, minAge) {
     return __awaiter(this, void 0, void 0, function* () {
-        let timestamp = new Date().getTime();
-        let cutoffTimestamp = timestamp - (minAge * 1000);
+        let timestamp;
+        if (minAge) {
+            timestamp = minAge;
+        }
+        else {
+            timestamp = getTimestamp();
+        }
         let result = yield Connection.client
-            .zrangebyscore(`processing:${queue}`, '-inf', cutoffTimestamp);
+            .zrangebyscore(`processing:${queue}`, '-inf', timestamp);
         if (result) {
             for (let id of result) {
                 yield Connection.client
@@ -93,11 +159,148 @@ function reQueue(queue, minAge) {
     });
 }
 exports.reQueue = reQueue;
-function retry(queue, id) {
+/**
+ * Count Successes
+ * returns number of current successes from named queue
+ * @param queue
+ */
+function countSuccesses(queue) {
     return __awaiter(this, void 0, void 0, function* () {
-        let timestamp = new Date().getTime();
+        let result = yield Connection.client
+            .zcard(`success:${queue}`);
+        return result;
+    });
+}
+exports.countSuccesses = countSuccesses;
+/**
+ * Count Errors
+ * returns number of current errors from named queue
+ * @param queue
+ */
+function countErrors(queue) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let result = yield Connection.client
+            .zcard(`error:${queue}`);
+        return result;
+    });
+}
+exports.countErrors = countErrors;
+/**
+ * Report Successes
+ * returns success log from named queue
+ * @param queue
+ * @param minAge
+ */
+function reportSuccesses(queue, minAge) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let timestamp;
+        if (minAge) {
+            timestamp = minAge;
+        }
+        else {
+            timestamp = getTimestamp();
+        }
+        let result = yield Connection.client
+            .zrangebyscore(`success:${queue}`, '-inf', timestamp);
+        return result;
+    });
+}
+exports.reportSuccesses = reportSuccesses;
+/**
+ * Report Errors
+ * returns error log from named queue
+ * @param queue
+ * @param minAge
+ */
+function reportErrors(queue, minAge) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let timestamp;
+        if (minAge) {
+            timestamp = minAge;
+        }
+        else {
+            timestamp = getTimestamp();
+        }
+        let result = yield Connection.client
+            .zrangebyscore(`error:${queue}`, '-inf', timestamp);
+        return result;
+    });
+}
+exports.reportErrors = reportErrors;
+/**
+ * Clear Successes
+ * clears success log from named queue
+ * @param queue
+ * @param minAge
+ */
+function clearSuccesses(queue, minAge) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let timestamp;
+        if (minAge) {
+            timestamp = minAge;
+        }
+        else {
+            timestamp = getTimestamp();
+        }
+        let result = yield Connection.client
+            .zremrangebyscore(`success:${queue}`, '-inf', timestamp);
+        return result;
+    });
+}
+exports.clearSuccesses = clearSuccesses;
+/**
+ * Clear Errors
+ * clears error log from the named queue
+ * @param queue
+ * @param minAge
+ */
+function clearErrors(queue, minAge) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let timestamp;
+        if (minAge) {
+            timestamp = minAge;
+        }
+        else {
+            timestamp = getTimestamp();
+        }
+        let result = yield Connection.client
+            .zremrangebyscore(`error:${queue}`, '-inf', timestamp);
+        return result;
+    });
+}
+exports.clearErrors = clearErrors;
+/**
+ * Destroy
+ * manually destroy a task by id
+ * @param queue
+ * @param id
+ */
+function destroy(queue, id) {
+    return __awaiter(this, void 0, void 0, function* () {
         yield Connection.client
             .multi()
+            .zrem(`queue:${queue}`, id)
+            .zrem(`processing:${queue}`, id)
+            .zrem(`success:${queue}`, id)
+            .zrem(`error:${queue}`, id)
+            .hrem(`items:${queue}:${id}`)
+            .exec();
+        return true;
+    });
+}
+exports.destroy = destroy;
+/**
+ * Retry
+ * moves a task from the error log to the queue
+ * @param queue
+ * @param id
+ */
+function retry(queue, id) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let timestamp = getTimestamp();
+        yield Connection.client
+            .multi()
+            .persist(`items:${queue}:${id}`)
             .zrem(`error:${queue}`, id)
             .zadd(`queue:${queue}`, timestamp, id)
             .exec();
@@ -105,6 +308,12 @@ function retry(queue, id) {
     });
 }
 exports.retry = retry;
+/**
+ * Load
+ * de-serializes from redis hash to Item by id
+ * @param queue
+ * @param id
+ */
 function load(queue, id) {
     return __awaiter(this, void 0, void 0, function* () {
         let data = yield Connection.client.hgetall(`items:${queue}:${id}`);
@@ -123,6 +332,13 @@ function load(queue, id) {
         return item;
     });
 }
+/**
+ * Run Task
+ * task running/logging logic
+ * @param queue
+ * @param id
+ * @param func
+ */
 function runTask(queue, id, func) {
     return __awaiter(this, void 0, void 0, function* () {
         yield Connection.client.hincrby(`items:${queue}:${id}`, 'attempts', 1);
@@ -132,7 +348,7 @@ function runTask(queue, id, func) {
         }
         try {
             let success = yield func(item);
-            let completedTimestamp = new Date().getTime();
+            let completedTimestamp = getTimestamp();
             if (success) {
                 yield Connection.client
                     .multi()
@@ -148,12 +364,13 @@ function runTask(queue, id, func) {
             }
         }
         catch (err) {
-            let completedTimestamp = new Date().getTime();
+            let completedTimestamp = getTimestamp();
             yield Connection.client
                 .multi()
                 .zrem(`processing:${item.queue}`, item.id)
                 .zadd(`error:${item.queue}`, completedTimestamp, item.id)
-                .hset(`data:${item.queue}:${item.id}`, 'error', err.message)
+                .hset(`items:${item.queue}:${item.id}`, 'error', err.message)
+                .expire(`items:${item.queue}:${item.id}`, config.retention || 60 * 60 * 24)
                 .exec();
         }
         return false;

@@ -20,13 +20,49 @@ export interface Item {
 
 var config: Config = null
 
+/**
+ * Initialize Qonvoy
+ * @param c 
+ */
 export function init(c: Config) {
     config = c
     Connection.init(c.redisConnectionString)
 }
 
+/**
+ * Get Client
+ * returns redis client that powers Qonvoy
+ */
+export function getClient() {
+    return Connection.client
+}
+
+/**
+ * Get Timestamp
+ * @param seconds 
+ */
+export function getTimestamp(seconds: number = 0) {
+    return (new Date().getTime()) + (seconds * 1000)
+}
+
+/**
+ * Modify Timestamp
+ * modifies a timestamp value by x seconds
+ * @param timestamp 
+ * @param seconds 
+ */
+export function modifyTimestamp(timestamp: number, seconds: number = 0) {
+    return timestamp + (seconds * 1000)
+}
+
+/**
+ * Add
+ * adds a task to named queue
+ * @param queue 
+ * @param meta 
+ */
 export async function add(queue: string, meta: any) {
-    let timestamp = new Date().getTime()
+    let timestamp = getTimestamp()
     let id = uuid()
     let item = <Item>{}
 
@@ -56,6 +92,12 @@ export async function add(queue: string, meta: any) {
     return id
 }
 
+/**
+ * Status
+ * returns status of job by id
+ * @param queue 
+ * @param id 
+ */
 export async function status(queue: string, id: string) {
     let item = await load(queue, id)
     
@@ -66,12 +108,18 @@ export async function status(queue: string, id: string) {
     return item
 }
 
+/**
+ * Process Next
+ * processes next task from named queue
+ * @param queue 
+ * @param func 
+ */
 export async function processNext(
     queue: string,
     func: (item: Item) => Promise<boolean>
 ) {
     let success: boolean = false
-    let timestamp = new Date().getTime()
+    let timestamp = getTimestamp()
     let result = await Connection.client
         .eval(
             LuaCommands.getNext(),
@@ -88,13 +136,20 @@ export async function processNext(
     return success
 }
 
+/**
+ * Process One
+ * process task by id from named queue
+ * @param queue 
+ * @param id 
+ * @param func 
+ */
 export async function processOne(
     queue: string,
     id: string,
     func: (item: any) => Promise<boolean>
 ) {
     let success: boolean = false
-    let timestamp = new Date().getTime()
+    let timestamp = getTimestamp()
     let result = await Connection.client
         .eval(
             LuaCommands.getOne(),
@@ -112,11 +167,24 @@ export async function processOne(
     return success
 }
 
-export async function reQueue(queue: string, minAge: number) {
-    let timestamp = new Date().getTime()
-    let cutoffTimestamp = timestamp - (minAge * 1000)
+/**
+ * Re-Queue
+ * moves any stuck jobs from the processing queue back to pending
+ * @param queue 
+ * @param minAge 
+ */
+export async function reQueue(queue: string, minAge?: number) {
+    let timestamp
+    
+    if (minAge) {
+        timestamp = minAge
+    }
+    else {
+        timestamp = getTimestamp()
+    }
+
     let result = await Connection.client
-        .zrangebyscore(`processing:${queue}`, '-inf', cutoffTimestamp)
+        .zrangebyscore(`processing:${queue}`, '-inf', timestamp)
 
     if (result) {
         for (let id of result) {
@@ -131,11 +199,149 @@ export async function reQueue(queue: string, minAge: number) {
     return true
 }
 
+/**
+ * Count Successes
+ * returns number of current successes from named queue
+ * @param queue 
+ */
+export async function countSuccesses(queue: string) {
+    let result = await Connection.client
+        .zcard(`success:${queue}`)
+
+    return result
+}
+
+/**
+ * Count Errors
+ * returns number of current errors from named queue
+ * @param queue 
+ */
+export async function countErrors(queue: string) {
+    let result = await Connection.client
+        .zcard(`error:${queue}`)
+
+    return result
+}
+
+/**
+ * Report Successes
+ * returns success log from named queue
+ * @param queue 
+ * @param minAge 
+ */
+export async function reportSuccesses(queue: string, minAge?: number) {
+    let timestamp
+    
+    if (minAge) {
+        timestamp = minAge
+    }
+    else {
+        timestamp = getTimestamp()
+    }
+
+    let result = await Connection.client
+        .zrangebyscore(`success:${queue}`, '-inf', timestamp)
+
+    return result
+}
+
+/**
+ * Report Errors
+ * returns error log from named queue
+ * @param queue 
+ * @param minAge 
+ */
+export async function reportErrors(queue: string, minAge?: number) {
+    let timestamp
+    
+    if (minAge) {
+        timestamp = minAge
+    }
+    else {
+        timestamp = getTimestamp()
+    }
+
+    let result = await Connection.client
+        .zrangebyscore(`error:${queue}`, '-inf', timestamp)
+
+    return result
+}
+
+/**
+ * Clear Successes
+ * clears success log from named queue
+ * @param queue 
+ * @param minAge 
+ */
+export async function clearSuccesses(queue: string, minAge?: number) {
+    let timestamp
+    
+    if (minAge) {
+        timestamp = minAge
+    }
+    else {
+        timestamp = getTimestamp()
+    }
+
+    let result = await Connection.client
+        .zremrangebyscore(`success:${queue}`, '-inf', timestamp)
+
+    return result
+}
+
+/**
+ * Clear Errors
+ * clears error log from the named queue
+ * @param queue 
+ * @param minAge 
+ */
+export async function clearErrors(queue: string, minAge?: number) {
+    let timestamp
+    
+    if (minAge) {
+        timestamp = minAge
+    }
+    else {
+        timestamp = getTimestamp()
+    }
+
+    let result = await Connection.client
+        .zremrangebyscore(`error:${queue}`, '-inf', timestamp)
+
+    return result
+}
+
+/**
+ * Destroy
+ * manually destroy a task by id
+ * @param queue 
+ * @param id 
+ */
+export async function destroy(queue: string, id: string) {
+    await Connection.client
+        .multi()
+        .zrem(`queue:${queue}`, id)
+        .zrem(`processing:${queue}`, id)
+        .zrem(`success:${queue}`, id)
+        .zrem(`error:${queue}`, id)
+        .hrem(`items:${queue}:${id}`)
+        .exec()
+    
+    return true
+}
+
+/**
+ * Retry
+ * moves a task from the error log to the queue
+ * @param queue 
+ * @param id 
+ */
 export async function retry(queue: string, id: string) {
-    let timestamp = new Date().getTime()
+    let timestamp = getTimestamp()
     
     await Connection.client
         .multi()
+        .persist(`items:${queue}:${id}`)
         .zrem(`error:${queue}`, id)
         .zadd(`queue:${queue}`, timestamp, id)
         .exec()
@@ -143,6 +349,12 @@ export async function retry(queue: string, id: string) {
     return true
 }
 
+/**
+ * Load
+ * de-serializes from redis hash to Item by id
+ * @param queue 
+ * @param id 
+ */
 async function load(queue: string, id: string) {
     let data = await Connection.client.hgetall(`items:${queue}:${id}`)
     
@@ -163,6 +375,13 @@ async function load(queue: string, id: string) {
     return item
 }
 
+/**
+ * Run Task
+ * task running/logging logic
+ * @param queue 
+ * @param id 
+ * @param func 
+ */
 async function runTask(
     queue: string,
     id: string,
@@ -182,7 +401,7 @@ async function runTask(
     
     try {
         let success: boolean = await func(item)
-        let completedTimestamp = new Date().getTime()
+        let completedTimestamp = getTimestamp()
         
         if (success) {
             await Connection.client
@@ -207,16 +426,20 @@ async function runTask(
         }
     }
     catch (err) {
-        let completedTimestamp = new Date().getTime()
+        let completedTimestamp = getTimestamp()
         
         await Connection.client
             .multi()
             .zrem(`processing:${item.queue}`, item.id)
             .zadd(`error:${item.queue}`, completedTimestamp, item.id)
             .hset(
-                `data:${item.queue}:${item.id}`,
+                `items:${item.queue}:${item.id}`,
                 'error',
                 err.message
+            )
+            .expire(
+                `items:${item.queue}:${item.id}`,
+                config.retention || 60*60*24
             )
             .exec()
     }
